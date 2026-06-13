@@ -1,0 +1,7 @@
+dataset,split,num_sentences,metric,zero_shot,fine_tuned,delta
+RefCOCO+,val,10758,REC_Acc@0.5,53.72,67.81,14.09
+RefCOCO+,val,10758,RES_mIoU,48.16,58.02,9.86
+RefCOCO+,val,10758,RES_oIoU,42.57,49.52,6.95
+RefCOCO+,val,10758,RES_Pr@0.5,51.98,65.22,13.24
+RefCOCO+,val,10758,RES_Pr@0.7,45.44,60.68,15.24
+RefCOCO+,val,10758,RES_Pr@0.9,22.31,30.89,8.58

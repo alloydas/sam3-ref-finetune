@@ -1,0 +1,151 @@
+diff --git a/sam3/perflib/fused.py b/sam3/perflib/fused.py
+index 6800cca..6abdf48 100644
+--- a/sam3/perflib/fused.py
++++ b/sam3/perflib/fused.py
+@@ -9,7 +9,16 @@ addmm_act_op = torch.ops.aten._addmm_activation
+ 
+ def addmm_act(activation, linear, mat1):
+     if torch.is_grad_enabled():
+-        raise ValueError("Expected grad to be disabled.")
++        # The fused inference kernel detaches the weights, so it can only run
++        # with grad disabled (i.e. a frozen / inference backbone). When grad is
++        # enabled, fall back to a standard differentiable linear + activation so
++        # the module can be fine-tuned.
++        y = linear(mat1)
++        if activation in (torch.nn.functional.relu, torch.nn.ReLU):
++            return torch.nn.functional.relu(y)
++        if activation in (torch.nn.functional.gelu, torch.nn.GELU):
++            return torch.nn.functional.gelu(y)
++        raise ValueError(f"Unexpected activation {activation}")
+     self = linear.bias.detach()
+     mat2 = linear.weight.detach()
+     self = self.to(torch.bfloat16)
+diff --git a/sam3/train/utils/logger.py b/sam3/train/utils/logger.py
+index 4d6c071..69a6a3d 100644
+--- a/sam3/train/utils/logger.py
++++ b/sam3/train/utils/logger.py
+@@ -27,6 +27,94 @@ def make_tensorboard_logger(log_dir: str, **writer_kwargs: Any):
+     )
+ 
+ 
++def make_wandb_logger(
++    project: str,
++    name: Optional[str] = None,
++    entity: Optional[str] = None,
++    group: Optional[str] = None,
++    dir: Optional[str] = None,
++    config: Optional[Dict[str, Any]] = None,
++    **init_kwargs: Any,
++):
++    """Factory for a Weights & Biases logger (rank-0 only)."""
++    if dir:
++        makedir(dir)
++    return WandbLogger(
++        project=project,
++        name=name,
++        entity=entity,
++        group=group,
++        dir=dir,
++        config=config,
++        **init_kwargs,
++    )
++
++
++class WandbLogger:
++    """A logger that forwards scalars to Weights & Biases.
++
++    Mirrors the TensorBoardLogger interface (log / log_dict / log_hparams) so the
++    Logger facade can drive both. Only rank 0 creates a run.
++    """
++
++    def __init__(
++        self,
++        project: str,
++        name: Optional[str] = None,
++        entity: Optional[str] = None,
++        group: Optional[str] = None,
++        dir: Optional[str] = None,
++        config: Optional[Dict[str, Any]] = None,
++        **init_kwargs: Any,
++    ) -> None:
++        _, self._rank = get_machine_local_and_dist_rank()
++        self._run = None
++        if self._rank == 0:
++            import wandb
++
++            self._run = wandb.init(
++                project=project,
++                name=name,
++                entity=entity,
++                group=group,
++                dir=dir,
++                config=config,
++                **init_kwargs,
++            )
++            logging.info(
++                f"wandb run initialized: {getattr(self._run, 'url', '(offline)')}"
++            )
++        atexit.register(self.close)
++
++    @staticmethod
++    def _scalar(v: Scalar) -> Scalar:
++        return v.item() if hasattr(v, "item") else v
++
++    def log(self, name: str, data: Scalar, step: int) -> None:
++        if self._run is None:
++            return
++        self._run.log({name: self._scalar(data)}, step=step)
++
++    def log_dict(self, payload: Dict[str, Scalar], step: int) -> None:
++        if self._run is None:
++            return
++        self._run.log({k: self._scalar(v) for k, v in payload.items()}, step=step)
++
++    def log_hparams(
++        self, hparams: Dict[str, Scalar], meters: Dict[str, Scalar]
++    ) -> None:
++        if self._run is None:
++            return
++        self._run.config.update(hparams, allow_val_change=True)
++        if meters:
++            self._run.log({k: self._scalar(v) for k, v in meters.items()})
++
++    def close(self) -> None:
++        if self._run is not None:
++            self._run.finish()
++            self._run = None
++
++
+ class TensorBoardWriterWrapper:
+     """
+     A wrapper around a SummaryWriter object.
+@@ -155,19 +243,29 @@ class Logger:
+         tb_should_log = tb_config and tb_config.pop("should_log", True)
+         self.tb_logger = instantiate(tb_config) if tb_should_log else None
+ 
++        # optional Weights & Biases logger
++        wandb_config = getattr(logging_conf, "wandb_writer", None)
++        self.wandb_logger = instantiate(wandb_config) if wandb_config else None
++
+     def log_dict(self, payload: Dict[str, Scalar], step: int) -> None:
+         if self.tb_logger:
+             self.tb_logger.log_dict(payload, step)
++        if self.wandb_logger:
++            self.wandb_logger.log_dict(payload, step)
+ 
+     def log(self, name: str, data: Scalar, step: int) -> None:
+         if self.tb_logger:
+             self.tb_logger.log(name, data, step)
++        if self.wandb_logger:
++            self.wandb_logger.log(name, data, step)
+ 
+     def log_hparams(
+         self, hparams: Dict[str, Scalar], meters: Dict[str, Scalar]
+     ) -> None:
+         if self.tb_logger:
+             self.tb_logger.log_hparams(hparams, meters)
++        if self.wandb_logger:
++            self.wandb_logger.log_hparams(hparams, meters)
+ 
+ 
+ # cache the opened file object, so that different calls to `setup_logger`

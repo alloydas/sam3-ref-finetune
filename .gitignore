@@ -1,0 +1,13 @@
+# data / weights are large — not committed
+images/
+*.tar.gz
+*.pt
+*.pth
+checkpoints/
+runs/
+wandb/
+__pycache__/
+*.pyc
+# large manifests / per-image data
+*_manifest.json
+*_coco_gt.json
