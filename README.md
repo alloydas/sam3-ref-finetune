@@ -32,12 +32,12 @@ a single 24 GB GPU.
 
 **Ref-L4** (13,420 expressions) — REC only
 
-| Metric | Zero-shot | Fine-tuned |
-|---|---|---|
-| REC Acc@0.5  | 64.59 | _see results/refl4_ |
-| REC Acc@0.75 | 58.33 | _see results/refl4_ |
-| REC Acc@0.9  | 47.18 | _see results/refl4_ |
-| mean box IoU | 62.14 | _see results/refl4_ |
+| Metric | Zero-shot | Fine-tuned | Δ |
+|---|---|---|---|
+| REC Acc@0.5  | 64.59 | **73.06** | +8.47 |
+| REC Acc@0.75 | 58.33 | **66.93** | +8.60 |
+| REC Acc@0.9  | 47.18 | **54.17** | +6.99 |
+| mean box IoU | 62.14 | **69.21** | +7.07 |
 
 Per-dataset details + machine-readable summaries are in `results/`.
 

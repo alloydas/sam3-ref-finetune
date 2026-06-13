@@ -1,0 +1,5 @@
+dataset,split,num_expressions,metric,zero_shot,fine_tuned,delta
+Ref-L4,val,13420,REC_Acc@0.5,64.59,73.06,8.47
+Ref-L4,val,13420,REC_Acc@0.75,58.33,66.93,8.60
+Ref-L4,val,13420,REC_Acc@0.9,47.18,54.17,6.99
+Ref-L4,val,13420,mean_box_IoU,62.14,69.21,7.07
